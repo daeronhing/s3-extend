@@ -26,56 +26,37 @@ class Sonar:
         self._trig = trigger
         self._echo = echo
 
-        self._ping = False
-        self._high = None
-        self._time = None
-
-        self._triggered = False
-
         self._trig_mode = pi.get_mode(self._trig)
         self._echo_mode = pi.get_mode(self._echo)
 
         pi.set_mode(self._trig, pigpio.OUTPUT)
         pi.set_mode(self._echo, pigpio.INPUT)
 
-        self._cb = pi.callback(self._trig, pigpio.EITHER_EDGE, self._cbf)
-        self._cb = pi.callback(self._echo, pigpio.EITHER_EDGE, self._cbf)
-
         self._inited = True
-
-    def _cbf(self, gpio, level, tick):
-        if gpio == self._trig:
-            if level == 0:  # trigger sent
-                self._triggered = True
-                self._high = None
-        else:
-            if self._triggered:
-                if level == 1:
-                    self._high = tick
-                else:
-                    if self._high is not None:
-                        self._time = tick - self._high
-                        self._high = None
-                        self._ping = True
 
     def read(self):
         """
-        Triggers a reading.  The returned reading is the number
-        of microseconds for the sonar round-trip.
-
-        round trip cms = round trip time / 1000000.0 * 34030
+        Triggers a reading.  The returned reading is the distance in cm
         """
-        if self._inited:
-            self._ping = False
-            self.pi.gpio_trigger(self._trig)
-            start = time.time()
-            while not self._ping:
-                if (time.time() - start) > 5.0:
-                    return 20000
-                time.sleep(0.001)
-            return self._time
-        else:
-            return None
+        self.pi.gpio_trigger(self._trig, 15, 1)
+        t3 = time.time()
+        
+        # Wait for echo pin to receive
+        while not self.pi.read(self._echo):
+            t4 = time.time()
+            if (t4 - t3) > 0.03:
+                return -1
+            
+        t1 = time.time()
+        
+        # Wait for receive finish
+        while self.pi.read(self._echo):
+            t5 = time.time()
+            if (t5 - t1) > 0.03:
+                return -2
+            
+        t2 = time.time()
+        return ((t2-t1) * 340 / 2) * 100
 
     def cancel(self):
         """
@@ -84,7 +65,6 @@ class Sonar:
         """
         if self._inited:
             self._inited = False
-            self._cb.cancel()
             self.pi.set_mode(self._trig, self._trig_mode)
             self.pi.set_mode(self._echo, self._echo_mode)
 
@@ -95,21 +75,15 @@ class Sonar:
 #
 #     import pigpio
 #
-#     import sonar_trigger_echo
-#
 #     pi = pigpio.pi()
 #
-#     sonar = sonar_trigger_echo.Sonar(pi, 23, 18)
+#     sonar = Sonar(pi, 1, 0)
 #
-#     end = time.time() + 600.0
+#     end = time.time() + 30
 #
-#     r = 1
-#     while time.time() < end:
-#         stime = sonar.read()
-#         distance = stime/ 29 / 2
-#         distance = round(distance, 2)
-#         print("{} {}".format(r, distance))
-#         r += 1
+#     while time.timme() < end:
+#         reading = sonar.read()
+#         print("Reading: ".format(reading))
 #         time.sleep(0.03)
 #
 #     sonar.cancel()

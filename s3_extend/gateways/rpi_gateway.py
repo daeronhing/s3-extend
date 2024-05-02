@@ -63,7 +63,7 @@ class RpiGateway(GatewayBase):
         #
         if not self.pi.connected:
             print('\nAttempting to start pigpiod...')
-            run(['sudo', 'pigpiod'])
+            run(['sudo', 'pigpiod', '-x', '0x0FFFFFFF'])
             time.sleep(.5)
             self.pi = pigpio.pi()
             if not self.pi.connected:
@@ -338,8 +338,7 @@ class RpiGateway(GatewayBase):
         Read the sonar device and convert value to
         centimeters. The value is then published as a report.
         """
-        sonar_time = self.sonar.read()
-        distance = sonar_time / 29 / 2
+        distance = self.sonar.read()
         distance = round(distance, 2)
         payload = {'report': 'sonar_data', 'value': distance}
         self.publish_payload(payload, 'from_rpi_gateway')
